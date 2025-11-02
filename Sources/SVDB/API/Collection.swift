@@ -11,26 +11,31 @@ import NaturalLanguage
 
 @available(macOS 10.15, *)
 @available(iOS 13.0, *)
-public class Collection {
-    private var documents: [UUID: Document] = [:]
+public class Collection<Doc: DocumentProtocol> {
+    private var documents: [UUID: Doc] = [:]
     private let name: String
 
     init(name: String) {
         self.name = name
     }
-
-    public func addDocument(id: UUID? = nil, text: String, embedding: [Double]) {
+    
+    // 向后兼容：添加Document的方法（如果Doc是Document类型）
+    public func addDocument(id: UUID? = nil, text: String, embedding: [Double]) where Doc == Document {
         let document = Document(
             id: id ?? UUID(),
             text: text,
             embedding: embedding
         )
-
         documents[document.id] = document
         save()
     }
 
-    public func addDocuments(_ docs: [Document]) {
+    public func addDocument(_ document: Doc) {
+        documents[document.id] = document
+        save()
+    }
+
+    public func addDocuments(_ docs: [Doc]) {
         docs.forEach { documents[$0.id] = $0 }
         save()
     }
@@ -44,22 +49,21 @@ public class Collection {
         query: [Double],
         num_results: Int = 10,
         threshold: Double? = nil
-    ) -> [SearchResult] {
+    ) -> [SearchResult<Doc>] {
         let queryMagnitude = sqrt(query.reduce(0) { $0 + $1 * $1 })
 
-        var similarities: [SearchResult] = []
+        var similarities: [SearchResult<Doc>] = []
         for document in documents.values {
             let id = document.id
-            let text = document.text
             let vector = document.embedding
-            let magnitude = sqrt(vector.reduce(0) { $0 + $1 * $1 })
+            let magnitude = document.magnitude
             let similarity = MathFunctions.cosineSimilarity(query, vector, magnitudeA: queryMagnitude, magnitudeB: magnitude)
 
             if let thresholdValue = threshold, similarity < thresholdValue {
                 continue
             }
 
-            similarities.append(SearchResult(id: id, text: text, score: similarity))
+            similarities.append(SearchResult(id: id, document: document, score: similarity))
         }
 
         return Array(similarities.sorted(by: { $0.score > $1.score }).prefix(num_results))
@@ -95,7 +99,7 @@ public class Collection {
             let compressedData = try Data(contentsOf: fileURL)
 
             let decompressedData = try (compressedData as NSData).decompressed(using: .zlib)
-            documents = try JSONDecoder().decode([UUID: Document].self, from: decompressedData as Data)
+            documents = try JSONDecoder().decode([UUID: Doc].self, from: decompressedData as Data)
 
             print("Successfully loaded collection: \(name)")
         } catch {
@@ -107,5 +111,15 @@ public class Collection {
     public func clear() {
         documents.removeAll()
         save()
+    }
+    
+    /// 获取所有文档（用于查找和遍历）
+    public func getAllDocuments() -> [Doc] {
+        return Array(documents.values)
+    }
+    
+    /// 根据ID获取文档
+    public func getDocument(byId id: UUID) -> Doc? {
+        return documents[id]
     }
 }

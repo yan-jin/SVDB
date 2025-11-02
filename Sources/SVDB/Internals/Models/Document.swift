@@ -7,7 +7,17 @@
 
 import Foundation
 
-public struct Document: Codable, Identifiable {
+/// Document协议，要求实现Codable和Identifiable，并包含embedding和magnitude
+@available(macOS 10.15, *)
+@available(iOS 13.0, *)
+public protocol DocumentProtocol: Codable, Identifiable {
+    var id: UUID { get }
+    var embedding: [Double] { get }
+    var magnitude: Double { get }
+}
+
+/// 默认的Document实现（向后兼容）
+public struct Document: DocumentProtocol {
     public let id: UUID
     public let text: String
     public let embedding: [Double]
