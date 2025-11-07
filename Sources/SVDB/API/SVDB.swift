@@ -71,4 +71,34 @@ public class SVDB {
         }
         collections.removeAll()
     }
+    
+    /// 保存所有 collections（用于应用退出时确保数据持久化）
+    public func saveAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        // 由于 collections 存储为 [String: Any]，我们需要遍历并调用 saveNow()
+        // 由于类型擦除，我们需要使用协议或类型检查
+        for (_, collection) in collections {
+            // 尝试将 collection 转换为有 saveNow 方法的类型
+            // 由于 Collection 是泛型类，我们需要使用反射或协议
+            // 简单方法：检查是否有 saveNow 方法（通过协议）
+            if let saveable = collection as? any CollectionSaveable {
+                saveable.saveNow()
+            }
+        }
+    }
+}
+
+/// 协议用于类型擦除，允许在 SVDB 中保存所有 collections
+@available(macOS 10.15, *)
+@available(iOS 13.0, *)
+private protocol CollectionSaveable {
+    func saveNow()
+}
+
+@available(macOS 10.15, *)
+@available(iOS 13.0, *)
+extension Collection: CollectionSaveable {
+    // Collection 已经实现了 saveNow() 方法
 }
